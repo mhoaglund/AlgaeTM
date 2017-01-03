@@ -38,6 +38,27 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
+LAST = 0
+RATE = 0
+def updateplayer(_reading):
+    """Apply the latest change in reading to the video playback.
+    Seems like its a lot of extra work to query the dbus proxy
+    for current playback speed, so it's just being done simply here"""
+    global LAST
+    if LAST == 0 or LAST == _reading:
+        if RATE > 3:
+            RATE -= 1
+    else:
+        if _reading > LAST:
+            PLAYER.action(1)
+            if RATE < 10:
+                RATE += 1
+        if _reading < LAST:
+            PLAYER.action(2)
+            if RATE > -10:
+                RATE -= 1
+    LAST = reading
+
 def quitplayer():
     """Gracefully quit the omxplayer"""
     PLAYER.quit()
@@ -61,6 +82,10 @@ def stopworkerthreads():
 
 try:
     while True:
+        while not READINGSQUEUE.empty():
+            reading = READINGSQUEUE.get()
+            updateplayer(reading)
+            print reading
         if hasattr(schedule, 'run_pending'):
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
