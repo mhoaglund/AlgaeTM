@@ -7,7 +7,7 @@ from utils import I2cMgrSettings
 from utils import ProcessJob
 from i2cagent import I2CAgent
 
-PATH = 'path/to/file.mp4'
+PATH = '/home/pi/algaevid.mov'
 PROCESSES = []
 
 JOBQUEUE = Queue()
@@ -29,7 +29,7 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH)
+PLAYER = OMXPlayer(PATH, ['--loop'])
 PROCESSES.append(PLAYER)
 
 def pulseplayer():
