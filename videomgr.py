@@ -45,6 +45,7 @@ def updateplayer(_reading):
     Seems like its a lot of extra work to query the dbus proxy
     for current playback speed, so it's just being done simply here"""
     global LAST
+    global RATE
     if LAST == 0 or LAST == _reading:
         if RATE > 3:
             RATE -= 1
