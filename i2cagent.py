@@ -1,3 +1,4 @@
+import time
 import smbus
 import logging
 from multiprocessing import Process, Queue
@@ -23,6 +24,10 @@ class I2CAgent(Process):
                     self.delay = currentjob.fine
             self.getlatestreadings()
 
+    def terminate(self):
+        print 'Terminating...'
+        self.cont = False
+
     def getlatestreadings(self):
         """Grab the latest reading from the client device and throw it on our queue"""
         try:
@@ -32,3 +37,5 @@ class I2CAgent(Process):
         except IOError as err:
             logging.info('i2c encountered a problem. %s', err)
             rawinput = self.lastreading
+            self.myreadings.put(self.lastreading)
+        time.sleep(self.delay)

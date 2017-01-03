@@ -12,7 +12,7 @@ PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
-COLLECTION_SPEED = 0.025
+COLLECTION_SPEED = 1
 
 
 logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
