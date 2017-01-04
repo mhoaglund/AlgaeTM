@@ -12,7 +12,7 @@ PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
-COLLECTION_SPEED = 1
+COLLECTION_SPEED = 0.5
 
 
 logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
@@ -29,7 +29,7 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH, ['--loop'])
+PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
 PROCESSES.append(PLAYER)
 
 def pulseplayer():
@@ -38,6 +38,7 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
+#TODO: make this into what it needs to be. change speed based on value, not delta increments
 LAST = 0
 RATE = 0
 def updateplayer(_reading):
@@ -81,6 +82,7 @@ def stopworkerthreads():
             print 'stopping worker'
             proc.terminate()
 
+spinupi2c()
 try:
     while True:
         while not READINGSQUEUE.empty():
