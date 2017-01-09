@@ -1,5 +1,6 @@
 import os
 import logging
+import numpy
 from time import sleep
 
 from multiprocessing import Queue
@@ -9,7 +10,7 @@ from utils import I2cMgrSettings
 from utils import ProcessJob
 from i2cagent import I2CAgent
 
-FILENAME = 'readings.txt'
+FILENAME = 'params.txt'
 PATH = '/home/pi/algaevid.mov'
 PROCESSES = []
 
@@ -20,10 +21,13 @@ PARAMS = {
     'MAX': 0,
     'MIN': 0,
     'STDDEV': 0,
-    'LOCALAVG': 0
+    'LOCALAVG': 0,
+    'MEDIAN': 0
 }
+PARAMS_UPDATE_RATE = 50
 PASTREADINGS = []
 MAX_PASTREADINGS = 800
+PLAYBACK_INDICES = 4
 
 logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
 
@@ -48,7 +52,6 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
-#TODO: make this into what it needs to be. change speed based on value, not delta increments
 LAST = 0
 RATE = 0
 def updateplayer(_reading):
@@ -58,17 +61,18 @@ def updateplayer(_reading):
     global LAST
     global RATE
     if LAST == 0 or LAST == _reading:
-        if RATE > 3:
+        if RATE > PLAYBACK_INDICES:
             RATE -= 1
+            PLAYER.action(RATE)
     else:
-        if _reading > LAST:
-            PLAYER.action(1)
-            if RATE < 10:
-                RATE += 1
-        if _reading < LAST:
-            PLAYER.action(2)
-            if RATE > -10:
-                RATE -= 1
+        delta = PARAMS['MEDIAN'] - _reading
+        severity = int(round(delta/PARAMS['STDDEV']))
+        if severity > PLAYBACK_INDICES:
+            severity = PLAYBACK_INDICES
+        if severity < (PLAYBACK_INDICES * -1):
+            severity = (PLAYBACK_INDICES * -1)
+        RATE = severity
+        PLAYER.action(severity)
     LAST = reading
 
 def quitplayer():
@@ -95,6 +99,7 @@ def saveparams():
         paramsfile.write(PARAMS[key])
         paramsfile.write('\n')
         paramsfile.close()
+    logging.info(PARAMS)
 
 def openparams():
     """Open saved params info on boot"""
@@ -105,14 +110,24 @@ def openparams():
             PARAMS[record[0]] = record[1]
     paramsfile.close()
 
+updatesteps = 0
 def updateparams(_reading):
     """Update our parameter set"""
+    global updatesteps
     if _reading > PARAMS['MAX']:
         PARAMS['MAX'] = _reading
-    if _reading < PARAMS['MIN']:
+    if _reading < PARAMS['MIN'] and _reading > 0:
         PARAMS['MIN'] = _reading
-    avg = sum(PASTREADINGS)/len(PASTREADINGS)
-    PARAMS['LOCALAVG'] = avg
+    if updatesteps > PARAMS_UPDATE_RATE:
+        median = numpy.median(numpy.array(PASTREADINGS))
+        avg = sum(PASTREADINGS)/len(PASTREADINGS)
+        stddev = numpy.std(numpy.array(PASTREADINGS))
+        PARAMS['LOCALAVG'] = avg
+        PARAMS['MEDIAN'] = median
+        PARAMS['STDDEV'] = stddev
+        updatesteps = 0
+    else:
+        updatesteps += 1
 
 def stopworkerthreads():
     """Stop any currently running threads"""
