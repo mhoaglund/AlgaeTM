@@ -88,6 +88,14 @@ def adjustsamplerate(adjustment):
     )
     JOBQUEUE.put(job)
 
+def checkforparamsfile():
+    """Check to see if we have a params file"""
+    if os.path.isfile(FILENAME) and os.stat(FILENAME).st_size > 0:
+        return
+    else:
+        paramsfile = open(FILENAME, 'w+')
+        paramsfile.close()
+
 def saveparams():
     """Save highs, lows, standard devs, etc."""
     paramsfile = open(FILENAME, 'w+')
@@ -138,6 +146,8 @@ def stopworkerthreads():
             proc.terminate()
 
 spinupi2c()
+checkforparamsfile()
+
 try:
     while True:
         while not READINGSQUEUE.empty():
