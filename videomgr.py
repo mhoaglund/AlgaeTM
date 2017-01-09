@@ -1,19 +1,29 @@
+import os
 import logging
 from time import sleep
-import schedule
+
 from multiprocessing import Queue
+import schedule
 from omxplayer import OMXPlayer
 from utils import I2cMgrSettings
 from utils import ProcessJob
 from i2cagent import I2CAgent
 
+FILENAME = 'readings.txt'
 PATH = '/home/pi/algaevid.mov'
 PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
 COLLECTION_SPEED = 0.5
-
+PARAMS = {
+    'MAX': 0,
+    'MIN': 0,
+    'STDDEV': 0,
+    'LOCALAVG': 0
+}
+PASTREADINGS = []
+MAX_PASTREADINGS = 800
 
 logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
 
@@ -74,6 +84,36 @@ def adjustsamplerate(adjustment):
     )
     JOBQUEUE.put(job)
 
+def saveparams():
+    """Save highs, lows, standard devs, etc."""
+    paramsfile = open(FILENAME, 'w+')
+    paramsfile.seek(0)
+    paramsfile.truncate()
+    for key in PARAMS:
+        paramsfile.write(key)
+        paramsfile.write(',')
+        paramsfile.write(PARAMS[key])
+        paramsfile.write('\n')
+        paramsfile.close()
+
+def openparams():
+    """Open saved params info on boot"""
+    paramsfile = open(FILENAME, 'r')
+    for entry in paramsfile.readlines():
+        record = entry.split(',')
+        if record[0] in PARAMS:
+            PARAMS[record[0]] = record[1]
+    paramsfile.close()
+
+def updateparams(_reading):
+    """Update our parameter set"""
+    if _reading > PARAMS['MAX']:
+        PARAMS['MAX'] = _reading
+    if _reading < PARAMS['MIN']:
+        PARAMS['MIN'] = _reading
+    avg = sum(PASTREADINGS)/len(PASTREADINGS)
+    PARAMS['LOCALAVG'] = avg
+
 def stopworkerthreads():
     """Stop any currently running threads"""
     for proc in PROCESSES:
@@ -87,6 +127,10 @@ try:
     while True:
         while not READINGSQUEUE.empty():
             reading = READINGSQUEUE.get()
+            if len(PASTREADINGS) > MAX_PASTREADINGS:
+                PASTREADINGS.pop(0)
+            PASTREADINGS.append(reading)
+            updateparams(reading)
             updateplayer(reading)
             print reading
         if hasattr(schedule, 'run_pending'):
