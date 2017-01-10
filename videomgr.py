@@ -27,9 +27,9 @@ PARAMS = {
 PARAMS_UPDATE_RATE = 50
 PASTREADINGS = []
 MAX_PASTREADINGS = 800
-PLAYBACK_INDICES = 4
+PLAYBACK_INDICES = 5
 
-logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
+logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.INFO)
 
 I2C_SETTINGS = I2cMgrSettings(
     COLLECTION_SPEED,
@@ -43,7 +43,7 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
+PLAYER = OMXPlayer(PATH, ['--loop', '--no-osd'])
 PROCESSES.append(PLAYER)
 
 def pulseplayer():
@@ -55,12 +55,15 @@ def pulseplayer():
 #TODO: create another implementation that 
 LAST = 0
 RATE = 0
+PLAYRATE = 0
 def updateplayer(_reading):
     """Apply the latest change in reading to the video playback.
     Seems like its a lot of extra work to query the dbus proxy
     for current playback speed, so it's just being done simply here"""
     global LAST
     global RATE
+    global PLAYRATE
+    severity = 0
     if LAST == 0 or LAST == _reading:
         if RATE > PLAYBACK_INDICES:
             RATE -= 1
@@ -68,17 +71,18 @@ def updateplayer(_reading):
     else:
         delta = _reading - PARAMS['MEDIAN']
         severity = int(round(delta/PARAMS['STDDEV']))
-        if severity > PLAYBACK_INDICES:
-            severity = PLAYBACK_INDICES
-        if severity < (PLAYBACK_INDICES * -1):
-            severity = (PLAYBACK_INDICES * -1)
         RATE = severity
-    if RATE > LAST:
-        PLAYER.action(2)
-    elif RATE <= LAST:
-        PLAYER.action(1)
-    print 'RATE:', RATE
-    LAST = reading
+    if RATE >= 0:
+        if PLAYRATE < PLAYBACK_INDICES:
+            PLAYER.action(2)
+            PLAYRATE += 1
+    elif RATE < 0:
+        if PLAYRATE > (PLAYBACK_INDICES * -1):
+            PLAYER.action(1)
+            PLAYRATE -= 1
+    logging.info('RATE %s', RATE)
+    logging.info('RDG %s', _reading)
+    LAST = _reading
 
 def quitplayer():
     """Gracefully quit the omxplayer"""
@@ -142,7 +146,7 @@ def updateparams(_reading):
         stddev = numpy.std(numpy.array(PASTREADINGS))
         PARAMS['LOCALAVG'] = avg
         PARAMS['MEDIAN'] = int(median)
-        PARAMS['STDDEV'] = int(stddev)
+        PARAMS['STDDEV'] = int(stddev)/2
         updatesteps = 0
     else:
         updatesteps += 1
