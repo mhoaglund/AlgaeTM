@@ -43,8 +43,8 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-#PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
-#PROCESSES.append(PLAYER)
+PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
+PROCESSES.append(PLAYER)
 
 def pulseplayer():
     """Glorified test function"""
@@ -52,6 +52,7 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
+#TODO: create another implementation that 
 LAST = 0
 RATE = 0
 def updateplayer(_reading):
@@ -63,16 +64,19 @@ def updateplayer(_reading):
     if LAST == 0 or LAST == _reading:
         if RATE > PLAYBACK_INDICES:
             RATE -= 1
-            PLAYER.action(RATE)
+            PLAYER.action(1)
     else:
-        delta = PARAMS['MEDIAN'] - _reading
+        delta = _reading - PARAMS['MEDIAN']
         severity = int(round(delta/PARAMS['STDDEV']))
         if severity > PLAYBACK_INDICES:
             severity = PLAYBACK_INDICES
         if severity < (PLAYBACK_INDICES * -1):
             severity = (PLAYBACK_INDICES * -1)
         RATE = severity
-        #PLAYER.action(severity)
+    if RATE > LAST:
+        PLAYER.action(2)
+    elif RATE <= LAST:
+        PLAYER.action(1)
     print 'RATE:', RATE
     LAST = reading
 
