@@ -43,8 +43,8 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
-PROCESSES.append(PLAYER)
+#PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
+#PROCESSES.append(PLAYER)
 
 def pulseplayer():
     """Glorified test function"""
@@ -72,7 +72,8 @@ def updateplayer(_reading):
         if severity < (PLAYBACK_INDICES * -1):
             severity = (PLAYBACK_INDICES * -1)
         RATE = severity
-        PLAYER.action(severity)
+        #PLAYER.action(severity)
+    print 'RATE:', RATE
     LAST = reading
 
 def quitplayer():
@@ -91,10 +92,10 @@ def adjustsamplerate(adjustment):
 def checkforparamsfile():
     """Check to see if we have a params file"""
     if os.path.isfile(FILENAME) and os.stat(FILENAME).st_size > 0:
+        openparams()
         return
     else:
-        paramsfile = open(FILENAME, 'w+')
-        paramsfile.close()
+        saveparams()
 
 def saveparams():
     """Save highs, lows, standard devs, etc."""
@@ -104,26 +105,31 @@ def saveparams():
     for key in PARAMS:
         paramsfile.write(key)
         paramsfile.write(',')
-        paramsfile.write(PARAMS[key])
+        paramsfile.write(str(PARAMS[key]))
         paramsfile.write('\n')
-        paramsfile.close()
+    paramsfile.close()
     logging.info(PARAMS)
 
 def openparams():
     """Open saved params info on boot"""
+    global PARAMS
     paramsfile = open(FILENAME, 'r')
     for entry in paramsfile.readlines():
         record = entry.split(',')
         if record[0] in PARAMS:
-            PARAMS[record[0]] = record[1]
+            PARAMS[record[0]] = int(record[1])
+            print record[0], record[1]
     paramsfile.close()
 
 updatesteps = 0
 def updateparams(_reading):
     """Update our parameter set"""
     global updatesteps
+    global PARAMS
     if _reading > PARAMS['MAX']:
         PARAMS['MAX'] = _reading
+        if PARAMS['MIN'] == 0:
+            PARAMS['MIN'] = _reading
     if _reading < PARAMS['MIN'] and _reading > 0:
         PARAMS['MIN'] = _reading
     if updatesteps > PARAMS_UPDATE_RATE:
@@ -131,8 +137,8 @@ def updateparams(_reading):
         avg = sum(PASTREADINGS)/len(PASTREADINGS)
         stddev = numpy.std(numpy.array(PASTREADINGS))
         PARAMS['LOCALAVG'] = avg
-        PARAMS['MEDIAN'] = median
-        PARAMS['STDDEV'] = stddev
+        PARAMS['MEDIAN'] = int(median)
+        PARAMS['STDDEV'] = int(stddev)
         updatesteps = 0
     else:
         updatesteps += 1
@@ -162,6 +168,7 @@ try:
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
     print 'Interrupted!'
+    saveparams()
     quitplayer()
     stopworkerthreads()
 
