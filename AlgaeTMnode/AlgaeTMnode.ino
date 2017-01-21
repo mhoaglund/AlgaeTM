@@ -11,7 +11,7 @@ SoftwareSerial mySerial(SENSOR_RX_PIN, SENSOR_TX_PIN); // RX, TX
 #define RS485_ENABLE_PIN 4
 #define RS485_TX_PIN 3
 #define RS485_RX_PIN 2
-SoftwareSerial rs485 (RS485_RX_PIN, RS485_TX_PIN);  // receive pin, transmit pin
+SoftwareSerial rs485 (RS485_RX_PIN, RS485_TX_PIN);  // RX, TX
 size_t fWrite (const byte what){return rs485.write(what);}
 int fAvailable (){return rs485.available ();}
 int fRead (){return rs485.read ();}
@@ -19,9 +19,10 @@ int fRead (){return rs485.read ();}
 RS485 _channel(fRead, fAvailable, fWrite, 0);
 
 //Pump stuff:
-#define PUMP_RELAY_1 = 9
-#define PUMP_RELAY_2 = 8
-
+#define PUMP_RELAY_1 9
+#define PUMP_RELAY_2 8
+bool PUMP1 = false;
+bool PUMP2 = false;
 int READING = 0;
 int RATE = 0;
 byte myAddress = 0;
@@ -31,9 +32,8 @@ void setup() {
    rs485.begin (38400);
   _channel.begin();
   Serial.begin(9600);
-  //Serial.println("Hello");
   mySerial.begin(9600);
-  pinMode (ENABLE_PIN, OUTPUT);
+  pinMode (RS485_ENABLE_PIN, OUTPUT);
   pinMode (PUMP_RELAY_1, OUTPUT);
   pinMode (PUMP_RELAY_2, OUTPUT);
 }
@@ -46,27 +46,36 @@ void loop() {
        myAddress, //who sent this
        READING // latest sensor reading
     };
-    digitalWrite (ENABLE_PIN, HIGH); //Does the class handle these?
+    digitalWrite (RS485_ENABLE_PIN, HIGH); //Does the class handle these?
     _channel.sendMsg (msg, sizeof (msg));
-    digitalWrite (ENABLE_PIN, LOW);
+    digitalWrite (RS485_ENABLE_PIN, LOW);
     //TODO: set globals for pump rate based on what comes in from other sensors
   }
-  RefreshReading();
+  updateReading();
+  unsigned long currentMillis = millis();
+  if ((unsigned long)(currentMillis - previousMillis) >= interval) {
+     updatePumps();
+     previousMillis = currentMillis;
+  }
 }
 
-void respond(msg){
+void _respond(byte msg[]){
   _channel.sendMsg (msg, sizeof (msg));
 }
-void updateReading() {
-  RefreshReading();
-}
 
-void RefreshReading(){
+void updateReading(){
   if (mySerial.available()) {
     //String strdata = mySerial.readString();
     int data = mySerial.read();
     READING = data;
     Serial.write(data);
   }
+}
+
+void updatePumps(){
+  if(PUMP1 == true){digitalWrite (PUMP_RELAY_1, LOW);}
+  else if(PUMP1 == false){digitalWrite (PUMP_RELAY_1, HIGH);}
+  if(PUMP2 == true){digitalWrite (PUMP_RELAY_2, LOW);}
+  else if(PUMP2 == false){digitalWrite (PUMP_RELAY_2, HIGH);}
 }
 
