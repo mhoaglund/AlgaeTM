@@ -16,7 +16,7 @@ PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
-COLLECTION_SPEED = 0.5
+COLLECTION_SPEED = 2.5
 PARAMS = {
     'MAX': 0,
     'MIN': 0,
@@ -52,6 +52,7 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
+#TODO: create another implementation that 
 LAST = 0
 RATE = 0
 def updateplayer(_reading):
@@ -63,16 +64,20 @@ def updateplayer(_reading):
     if LAST == 0 or LAST == _reading:
         if RATE > PLAYBACK_INDICES:
             RATE -= 1
-            PLAYER.action(RATE)
+            PLAYER.action(1)
     else:
-        delta = PARAMS['MEDIAN'] - _reading
+        delta = _reading - PARAMS['MEDIAN']
         severity = int(round(delta/PARAMS['STDDEV']))
         if severity > PLAYBACK_INDICES:
             severity = PLAYBACK_INDICES
         if severity < (PLAYBACK_INDICES * -1):
             severity = (PLAYBACK_INDICES * -1)
         RATE = severity
-        PLAYER.action(severity)
+    if RATE > LAST:
+        PLAYER.action(2)
+    elif RATE <= LAST:
+        PLAYER.action(1)
+    print 'RATE:', RATE
     LAST = reading
 
 def quitplayer():
@@ -88,6 +93,14 @@ def adjustsamplerate(adjustment):
     )
     JOBQUEUE.put(job)
 
+def checkforparamsfile():
+    """Check to see if we have a params file"""
+    if os.path.isfile(FILENAME) and os.stat(FILENAME).st_size > 0:
+        openparams()
+        return
+    else:
+        saveparams()
+
 def saveparams():
     """Save highs, lows, standard devs, etc."""
     paramsfile = open(FILENAME, 'w+')
@@ -96,26 +109,31 @@ def saveparams():
     for key in PARAMS:
         paramsfile.write(key)
         paramsfile.write(',')
-        paramsfile.write(PARAMS[key])
+        paramsfile.write(str(PARAMS[key]))
         paramsfile.write('\n')
-        paramsfile.close()
+    paramsfile.close()
     logging.info(PARAMS)
 
 def openparams():
     """Open saved params info on boot"""
+    global PARAMS
     paramsfile = open(FILENAME, 'r')
     for entry in paramsfile.readlines():
         record = entry.split(',')
         if record[0] in PARAMS:
-            PARAMS[record[0]] = record[1]
+            PARAMS[record[0]] = int(record[1])
+            print record[0], record[1]
     paramsfile.close()
 
 updatesteps = 0
 def updateparams(_reading):
     """Update our parameter set"""
     global updatesteps
+    global PARAMS
     if _reading > PARAMS['MAX']:
         PARAMS['MAX'] = _reading
+        if PARAMS['MIN'] == 0:
+            PARAMS['MIN'] = _reading
     if _reading < PARAMS['MIN'] and _reading > 0:
         PARAMS['MIN'] = _reading
     if updatesteps > PARAMS_UPDATE_RATE:
@@ -123,8 +141,8 @@ def updateparams(_reading):
         avg = sum(PASTREADINGS)/len(PASTREADINGS)
         stddev = numpy.std(numpy.array(PASTREADINGS))
         PARAMS['LOCALAVG'] = avg
-        PARAMS['MEDIAN'] = median
-        PARAMS['STDDEV'] = stddev
+        PARAMS['MEDIAN'] = int(median)
+        PARAMS['STDDEV'] = int(stddev)
         updatesteps = 0
     else:
         updatesteps += 1
@@ -138,6 +156,8 @@ def stopworkerthreads():
             proc.terminate()
 
 spinupi2c()
+checkforparamsfile()
+
 try:
     while True:
         while not READINGSQUEUE.empty():
@@ -152,6 +172,7 @@ try:
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
     print 'Interrupted!'
+    saveparams()
     quitplayer()
     stopworkerthreads()
 
