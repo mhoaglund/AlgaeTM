@@ -38,7 +38,7 @@ int pointmax = 115;
 int pointmin = 11;
 int pointreading = 0; //the latest point reading
 long pointscalar = 0;
-//Typical basal reading is 10-14.
+//Typical basal reading is 9-12.
 //Typical maximum is 100.
 
 byte samplecount = 0;
@@ -69,15 +69,12 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-  //Schedule interactions with ambient sensor
   if(currentMillis - previousMillis > amb_interval) {
     previousMillis = currentMillis; 
     Serial2.write("Z\r\n");  //ask for a CO2 reading
     delay(1);
     if(Serial2.available()){
       String ambreading = Serial2.readStringUntil('\n');
-      //String reading = String(data);
-      //Parsing down to the actual ppm data we need
       ambreading.remove(0,3);
       int cleanambrdg = ambreading.toInt();
       ambientreading = cleanambrdg;
