@@ -10,6 +10,8 @@
 //In the final install, another device on the same rs485 bus will listen for readings.
 //See AlgaeTMprojectornode.ino
 
+//Target is Arduino Nano 328.
+
 #include <RS485_non_blocking.h>
 
 #include <SoftwareSerial.h>

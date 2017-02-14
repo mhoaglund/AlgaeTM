@@ -12,6 +12,8 @@
 //Readings are also sent to a listener device for routing them to other
 //devices over other protocols: see AlgaeTMlistener.ino
 
+//Target is Arduino Mega 2560.
+
 #include <SoftwareSerial.h>
 #include <Wire.h>
 
@@ -34,10 +36,6 @@ const long DPI = 30000;
 long CPI = 30000;
 long CPImin = 400;
 
-long PUMP_TIMINGS[] = {30000,30000,30000,30000,30000,30000,30000}; //Each pump has subtly different timing. Start at 1 minute.
-long PUMP_TIMING_PREVS[] = {0,0,0,0,0,0,0}; 
-bool PUMP_STATES[] = {false, false, false, false, false, false, false};
-
 //*** SENSOR READING PARAMS:
 int ambientmax = 450;
 int ambientmin = 417;
@@ -46,7 +44,7 @@ long ambientmodifier = 0;
 //Typical basal reading with a good indoor calibration is 350-450.
 //Unlikely to change much over time with a good calibration.
 
-int pointmax = 100;
+int pointmax = 60;
 int pointmin = 11;
 int oldpointreading = 0;
 int pointreading = 0; //the latest point reading
@@ -59,7 +57,6 @@ long pointscalar = 0;
 byte samplecount = 0;
 byte samplethreshold = 60; //how many seconds to allow for calibration at startup
 
-int MIN_CYCLE = 500;
 byte stochasticity = 4;
 
 void setup() {
@@ -92,11 +89,9 @@ void loop() {
       if(ambientreading > ambientmax) ambientmax = ambientreading;
       if(ambientreading < ambientmin) ambientmin = ambientreading;
       if(samplecount <= samplethreshold) samplecount++;
-      //Serial.print("AMB RDG: ");
-      //Serial.println(ambientreading);
     }
   }
-  //New Pump Control Loop- much shorter
+  
   long timeDelta = currentMillis - pumpprevMillis;
   if(timeDelta > checktime) {
     pumpprevMillis = currentMillis; 
@@ -113,7 +108,6 @@ void loop() {
     if(pointreading < pointmin) pointreading = pointmin;
   }
 
-  //if(samplecount >= samplethreshold) UpdatePumpTimeSignature();
   UpdatePumpTimeSignature();
 }
 
@@ -132,7 +126,7 @@ void UpdatePumpStates(){
 void UpdatePumpTimeSignature(){
   pointscalar = map(pointreading, pointmin, pointmax, 300, 1);
   if(pointscalar < min_checktime) pointscalar = min_checktime;
-  long pointsq = (long)pointscalar * (long)pointscalar; //betw 90k and 1
+  long pointsq = (long)pointscalar * (long)pointscalar; //squaring our point sensor's relative value so we can get an exponential response
   int squaredscalar = map(pointsq, 90001, 1, 300, 1); //remapping after square
   ambientmodifier = map(ambientreading, ambientmin, ambientmax, 20, 1);
   checktime = squaredscalar + ambientmodifier;
