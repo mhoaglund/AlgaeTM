@@ -6,6 +6,8 @@
 //receives available over i2c. Expected final configuration is that This
 //will be running on a device connected to a Raspberry Pi via i2c.
 
+//Target is Arduino Nano 328.
+
 #include <RS485_non_blocking.h>
 #include <SoftwareSerial.h>
 #include <EEPROM.h>

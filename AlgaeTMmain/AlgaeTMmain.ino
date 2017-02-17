@@ -22,10 +22,11 @@ byte PUMPS[] = {36,38,40,42,44,46,48}; //Logic output pins to relays
 
 long checktime = 500;
 long min_checktime = 10;
-byte MAX_TICKS = 24;
+byte MAX_TICKS = 27;
 byte PUMP_TICKS[] = {0,0,0,0,0,0,0};
-byte PUMP_STATECHANGES[] = {1,3,5,8,11,14,17};
-byte OFFTIME = 6; //in 'ticks'
+byte PUMP_STATECHANGES[] = {1,4,7,10,13,16,19};
+byte OFFTIME = 8; //in 'ticks'
+boolean DIR = true;
 
 long previousMillis = 0;
 long pumpprevMillis = 0;
@@ -113,8 +114,16 @@ void loop() {
 
 void UpdatePumpStates(){
   for(byte i = 0; i < PUMP_COUNT; i++){
-    if(PUMP_TICKS[i] >= MAX_TICKS) PUMP_TICKS[i] = 0;
-    else PUMP_TICKS[i]++;
+    if(PUMP_TICKS[i] >= MAX_TICKS){
+      DIR = false;
+      //PUMP_TICKS[i] = 0;
+    }
+    if(PUMP_TICKS[i] <= 0){
+      DIR = true;
+    }
+    if(DIR) PUMP_TICKS[i]++;
+    else PUMP_TICKS[i]--;
+    //else PUMP_TICKS[i]++;
     if(PUMP_TICKS[i] > PUMP_STATECHANGES[i] & PUMP_TICKS[i] < (PUMP_STATECHANGES[i]+ OFFTIME)){
       digitalWrite(PUMPS[i], LOW);
     }
