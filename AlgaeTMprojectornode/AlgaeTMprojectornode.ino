@@ -1,25 +1,28 @@
-//Sensor Reading Relay Listener
+//RS485 Async receiver Firmware
 //Developed for Alison Hiltner, 2017
 //Developed by maxwell.hoaglund@gmail.com
 //****
-//This firmware simply listens on an rs485 bus and makes any packets it
-//receives available over i2c. Expected final configuration is that This
-//will be running on a device connected to a Raspberry Pi via i2c.
+//This firmware asynchronously listens for sensor readings transmitted over RS485.
+//It also responds to requests for those readings over i2c.
 
-//Target is Arduino Nano 328.
+//In initial application, readings are being requested by a Raspberry Pi, which
+//acts as the i2c master in this case.
+
+//Target is Arduino 328.
 
 #include <RS485_non_blocking.h>
 #include <SoftwareSerial.h>
-#include <EEPROM.h>
 #include <Wire.h>
 
 #define ENABLE_PIN 4
 #define TX_PIN 2
 #define RX_PIN 3
 SoftwareSerial rs485 (RX_PIN, TX_PIN);  // receive pin, transmit pin
-long ambient = 0;
-long point = 0;
-byte readings[] = {0,0,0,0};
+byte reducedAmbient = 0;
+const int POINT_MAX = 255;
+int AMB_MAX = 500;
+byte reducedPoint = 0;
+byte readings[] = {0,0};
 
 int fAvailable ()
    {
@@ -47,7 +50,11 @@ void setup() {
 }
 
 void requestEvent() {
-  Wire.write(readings, sizeof(readings));
+  byte packet[] = {
+    reducedAmbient,
+    reducedPoint,
+    };
+  Wire.write(packet, sizeof(packet));
 }
 
 void loop() {
@@ -59,9 +66,10 @@ void loop() {
     }
     int ambpack = word(channel.getData()[1], channel.getData()[0]);
     int pointpack = word(channel.getData()[3], channel.getData()[2]);
-    Serial.println(ambpack); //YES!
-    Serial.println(pointpack); //YES!
-    readings[0] = ambpack;
-    readings[1] = pointpack;
+
+    if(ambpack > AMB_MAX) AMB_MAX = ambpack;
+    reducedAmbient = map(ambpack, 350, AMB_MAX, 1, 11);
+    if(pointpack > POINT_MAX) pointpack = POINT_MAX;
+    reducedPoint = map(pointpack, 10, POINT_MAX, 1, 11);
   }
 }
