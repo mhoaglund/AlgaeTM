@@ -20,17 +20,22 @@
 byte PUMPS[] = {36,38,40,42,44,46,48}; //Logic output pins to relays
 #define PUMP_COUNT 7 //Reference for arr size
 
-long checktime = 500;
-byte MAX_TICKS = 21;
-byte PUMP_TICKS = 0;
-byte PUMP_STATECHANGES[] = {1,4,7,10,13,16,19};
+const long SIGNAL_CHECKTIME = 15; //pump loop speed for signal wave
+const byte MAX_TICKS = 21; //number of ticks in a measure of time
+const byte PUMP_STATECHANGES[] = {1,4,7,10,13,16,19}; //pump changeover points
+
+//At times, pump timing will be varied by small random amounts. Pauses will also be inserted.
 byte PUMP_STATECHANGE_AUX_STARTS[] = {0,0,0,0,0,0,0};
 byte PUMP_STATECHANGE_AUX_PAUSES[] = {0,0,0,0,0,0,0};
 byte PUMP_STATECHANGE_AUX_RAND_PAUSES[] = {0,0,0,0,0,0,0};
 
+//Working variables for the pump loop.
+byte PUMP_TICKS = 0;
+long checktime = 500;
+
 boolean DIR = true;
 boolean CLEANSWEEP = true;
-byte CLEAN_THRESHOLD = 20;
+const byte CLEAN_THRESHOLD = 20;
 
 long previousMillis = 0;
 long pumpprevMillis = 0;
@@ -41,23 +46,22 @@ const long amb_interval = 1000;
 int ambientmax = 515;
 int ambientmin = 375;
 int ambientreading = 0; //the latest ambient reading
-long ambientmodifier = 0;
 //Typical basal reading with a good indoor calibration is 350-450.
 //Unlikely to change much over time with a good calibration.
 
 int pointmax = 60;
 int pointmin = 11;
 int pointreading = 0; //the latest point reading
+int oldpointreading = 0;
 const int MIN_BASE_CHECKTIME = 45;
 const int MAX_BASE_CHECKTIME = 300;
 //Typical basal reading is 9-12.
 //Typical maximum is 100.
 
+boolean SHOULD_SIGNAL = false;
+boolean SWEEP_DEBOUNCE = false;
+
 //*** END SENSOR READING PARAMS
-
-byte samplecount = 0;
-byte samplethreshold = 60; //how many seconds to allow for calibration at startup
-
 byte stochasticity = 4;
 
 void setup() {
@@ -79,6 +83,7 @@ void loop() {
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > amb_interval) {
     previousMillis = currentMillis; 
+    if(SWEEP_DEBOUNCE) SWEEP_DEBOUNCE = false;
     UpdateIntern();
     Serial2.write("Z\r\n");  //ask for a CO2 reading
     delay(1);
@@ -89,8 +94,6 @@ void loop() {
       ambientreading = cleanambrdg;
       if(ambientreading > ambientmax) ambientmax = ambientreading;
       if(ambientreading < ambientmin) ambientmin = ambientreading;
-      if(samplecount <= samplethreshold) samplecount++;
-      //Serial.println(ambientreading);
     }
     else{
       ambientreading = 450;
@@ -105,8 +108,9 @@ void loop() {
   
   if (Serial1.available()){
     String ptreading = Serial1.readStringUntil('\n');
-    ptreading.remove(0,10);
+    ptreading.remove(0,10); //the SprintIR sensor sends back a raw reading and a processed one. trimming the raw one here.
     int cleanptrdg = ptreading.toInt();
+    
     pointreading = cleanptrdg;
     if(pointreading > pointmax) pointmax = pointreading;
     if(pointreading < pointmin) pointreading = pointmin;
@@ -115,18 +119,18 @@ void loop() {
 }
 
 void UpdatePumpStates(){
-    if(PUMP_TICKS >= MAX_TICKS){
-      DecoratePumpCycle();
-      DIR = false;
-    }
-    if(PUMP_TICKS <= 0){
-      //if(CLEANSWEEP) CLEANSWEEP = false;
-      DIR = true;
-    }
-    if(DIR) PUMP_TICKS++;
-    else PUMP_TICKS--;
+  if(PUMP_TICKS >= MAX_TICKS){
+    DecoratePumpCycle();
+    DIR = false;
+  }
+  if(PUMP_TICKS <= 0){
+    DIR = true;
+    SHOULD_SIGNAL = false; //clear signalling flag
+  }
+  if(DIR) PUMP_TICKS++;
+  else PUMP_TICKS--;
     
-  if(CLEANSWEEP){
+  if(CLEANSWEEP | SHOULD_SIGNAL){
     for(byte i = 0; i < PUMP_COUNT; i++){
       if(PUMP_TICKS > PUMP_STATECHANGES[i]){
         digitalWrite(PUMPS[i], LOW);
@@ -152,16 +156,36 @@ void UpdatePumpStates(){
   }
 }
 
-void UpdatePumpTimeSignature(){
-  if(pointreading > CLEAN_THRESHOLD) CLEANSWEEP = false;
-  else CLEANSWEEP = true;
+//May need to debounce this if readings ever vacillate near to our clean threshold.
+void SetSweepState(boolean _state){
+  if(CLEANSWEEP == _state | SWEEP_DEBOUNCE == true) return;
+  Serial.println("Flipped cleansweep state, signal wave incoming");
+  SWEEP_DEBOUNCE = true;
+  CLEANSWEEP = _state;
+  SHOULD_SIGNAL = true;
+  PUMP_TICKS = 1;
+  DIR = true;
+  for(byte i = 0; i < PUMP_COUNT; i++){
+    digitalWrite(PUMPS[i], LOW);
+  }
+}
 
+void UpdatePumpTimeSignature(){
+  if(pointreading > CLEAN_THRESHOLD){
+    SetSweepState(false);
+  }
+  else{
+    SetSweepState(true);
+  }
+  if(SHOULD_SIGNAL){
+    checktime = SIGNAL_CHECKTIME;
+    return;
+  }
   int logscalar = log((0.1 * pointreading)-0.5)*60;
   if(logscalar < 1) logscalar = 1; //superstition
   int mappedscalar = map(logscalar, 200, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
-  ambientmodifier = map(ambientreading, ambientmin, ambientmax, 20, 1);
+  int ambientmodifier = map(ambientreading, ambientmin, ambientmax, 20, 1);
   checktime = mappedscalar + ambientmodifier;
-  Serial.println(logscalar, DEC);
 }
 
 void DecoratePumpCycle(){
