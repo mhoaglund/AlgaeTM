@@ -20,7 +20,7 @@
 byte PUMPS[] = {36,38,40,42,44,46,48}; //Logic output pins to relays
 #define PUMP_COUNT 7 //Reference for arr size
 
-const long SIGNAL_CHECKTIME = 15; //pump loop speed for signal wave
+const long SIGNAL_CHECKTIME = 45; //pump loop speed for signal wave
 const byte MAX_TICKS = 21; //number of ticks in a measure of time
 const byte PUMP_STATECHANGES[] = {1,4,7,10,13,16,19}; //pump changeover points
 
@@ -35,7 +35,8 @@ long checktime = 500;
 
 boolean DIR = true;
 boolean CLEANSWEEP = true;
-const byte CLEAN_THRESHOLD = 20;
+const byte CLEAN_THRESHOLD = 40;
+const byte STEADY_TIME = 8;
 
 long previousMillis = 0;
 long pumpprevMillis = 0;
@@ -45,7 +46,7 @@ const long amb_interval = 1000;
 //*** SENSOR READING PARAMS:
 int ambientmax = 515;
 int ambientmin = 375;
-int ambientreading = 0; //the latest ambient reading
+int ambientreading = 450; //the latest ambient reading
 //Typical basal reading with a good indoor calibration is 350-450.
 //Unlikely to change much over time with a good calibration.
 
@@ -53,13 +54,15 @@ int pointmax = 60;
 int pointmin = 11;
 int pointreading = 0; //the latest point reading
 int oldpointreading = 0;
-const int MIN_BASE_CHECKTIME = 45;
-const int MAX_BASE_CHECKTIME = 300;
+const int MIN_BASE_CHECKTIME = 90;
+const int MAX_BASE_CHECKTIME = 450;
 //Typical basal reading is 9-12.
 //Typical maximum is 100.
 
 boolean SHOULD_SIGNAL = false;
 boolean SWEEP_DEBOUNCE = false;
+long debouncemillis = 0;
+long debounce_interval = 60000;
 
 //*** END SENSOR READING PARAMS
 byte stochasticity = 4;
@@ -73,31 +76,26 @@ void setup() {
   pinMode(PUMPS[5], OUTPUT);
   pinMode(PUMPS[6], OUTPUT);
   Serial.begin(9600);
-  Serial2.begin(9600);
+  //Serial3.begin(9600);
   Serial1.begin(9600);
   Wire.begin();
   randomSeed(analogRead(0));
+  Serial.println("starting...");
 }
 
 void loop() {
+  if(debouncemillis > debounce_interval){
+    debouncemillis = 0;
+    SWEEP_DEBOUNCE = false;
+    Serial.println("Debounce gate closed");
+  }
+  if(SWEEP_DEBOUNCE) debouncemillis++;
+
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > amb_interval) {
     previousMillis = currentMillis; 
-    if(SWEEP_DEBOUNCE) SWEEP_DEBOUNCE = false;
+    
     UpdateIntern();
-    Serial2.write("Z\r\n");  //ask for a CO2 reading
-    delay(1);
-    if(Serial2.available()){
-      String ambreading = Serial2.readStringUntil('\n');
-      ambreading.remove(0,3);
-      int cleanambrdg = ambreading.toInt();
-      ambientreading = cleanambrdg;
-      if(ambientreading > ambientmax) ambientmax = ambientreading;
-      if(ambientreading < ambientmin) ambientmin = ambientreading;
-    }
-    else{
-      ambientreading = 450;
-    }
   }
   
   long timeDelta = currentMillis - pumpprevMillis;
@@ -108,22 +106,39 @@ void loop() {
   
   if (Serial1.available()){
     String ptreading = Serial1.readStringUntil('\n');
+    if(ptreading.length() < 10) return;
     ptreading.remove(0,10); //the SprintIR sensor sends back a raw reading and a processed one. trimming the raw one here.
     int cleanptrdg = ptreading.toInt();
-    
+    if(cleanptrdg < 11) cleanptrdg = 10;
     pointreading = cleanptrdg;
+    Serial.print("PT: ");
+    Serial.println(pointreading);
     if(pointreading > pointmax) pointmax = pointreading;
     if(pointreading < pointmin) pointreading = pointmin;
   }
   UpdatePumpTimeSignature();
 }
 
+byte offct = 0;
+byte onct = 0;
 void UpdatePumpStates(){
   if(PUMP_TICKS >= MAX_TICKS){
     DecoratePumpCycle();
+    if(CLEANSWEEP){
+      if(onct < STEADY_TIME){
+        onct++;
+        return;
+      }else onct = 0;
+    }
     DIR = false;
   }
   if(PUMP_TICKS <= 0){
+    if(CLEANSWEEP){
+      if(offct < STEADY_TIME){
+        offct++;
+        return;
+      }else offct = 0;
+    }
     DIR = true;
     SHOULD_SIGNAL = false; //clear signalling flag
   }
@@ -142,7 +157,7 @@ void UpdatePumpStates(){
   //If CLEANSWEEP is off, the exhale should talk back with stochastic events.
   for(byte i = 0; i < PUMP_COUNT; i++){
     if(!DIR){
-      if(PUMP_TICKS < PUMP_STATECHANGE_AUX_STARTS[i] | PUMP_TICKS == PUMP_STATECHANGE_AUX_PAUSES[i] | PUMP_TICKS == PUMP_STATECHANGE_AUX_RAND_PAUSES[i]){
+      if(PUMP_TICKS < PUMP_STATECHANGE_AUX_STARTS[i] | PUMP_TICKS == PUMP_STATECHANGE_AUX_PAUSES[i]){
         digitalWrite(PUMPS[i], HIGH);
       }
       else digitalWrite(PUMPS[i], LOW);
@@ -183,9 +198,12 @@ void UpdatePumpTimeSignature(){
   }
   int logscalar = log((0.1 * pointreading)-0.5)*60;
   if(logscalar < 1) logscalar = 1; //superstition
-  int mappedscalar = map(logscalar, 200, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
+  int base_scalar = map(pointreading, 300, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
+  //int mappedscalar = map(logscalar, 200, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
   int ambientmodifier = map(ambientreading, ambientmin, ambientmax, 20, 1);
-  checktime = mappedscalar + ambientmodifier;
+  //checktime = mappedscalar + ambientmodifier;
+  checktime = base_scalar + ambientmodifier;
+  if(checktime < SIGNAL_CHECKTIME) checktime = SIGNAL_CHECKTIME; //throttling for now, for the pumps
 }
 
 void DecoratePumpCycle(){
