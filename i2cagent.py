@@ -15,7 +15,7 @@ class I2CAgent(Process):
         self.bus = smbus.SMBus(1)
         self.internaddr = _settings.internaddr
         self.delay = _settings.delay
-        self.lastreading = 0
+        self.lastreading = [5, 1]
 
     def run(self):
         while self.cont:
@@ -33,9 +33,8 @@ class I2CAgent(Process):
         """Grab the latest reading from the client device and throw it on our queue"""
         try:
             rawinput = self.bus.read_i2c_block_data(0x08, 0)
-            bytelist = [rawinput[0], rawinput[1]]
-            n = struct.unpack('>H', ''.join(map(chr, bytelist)))[0]
-            self.lastreading = n
+            self.lastreading[0] = rawinput[0] #between 1 and 11, usu. 5-7
+            self.lastreading[1] = rawinput[1] #between 1 and 11. usu. 1
             self.myreadings.put(self.lastreading)
         except IOError as err:
             logging.info('i2c encountered a problem. %s', err)

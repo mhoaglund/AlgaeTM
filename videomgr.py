@@ -11,12 +11,12 @@ from utils import ProcessJob
 from i2cagent import I2CAgent
 
 FILENAME = 'params.txt'
-PATH = '/home/pi/algaevid.mov'
+PATH = '/home/pi/IMG_1881_8.mov'
 PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
-COLLECTION_SPEED = 2.5
+COLLECTION_SPEED = 1
 PARAMS = {
     'MAX': 0,
     'MIN': 0,
@@ -27,7 +27,13 @@ PARAMS = {
 PARAMS_UPDATE_RATE = 50
 PASTREADINGS = []
 MAX_PASTREADINGS = 800
-PLAYBACK_INDICES = 5
+PLAYBACK_INDICES = 11
+
+MAX_POINT_READING = 150
+MIN_POINT_READING = 10
+
+MAX_AMBIENT_READING = 530
+MIN_AMBIENT_READING = 350
 
 logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.INFO)
 
@@ -43,7 +49,7 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH, ['--loop', '--no-osd'])
+PLAYER = OMXPlayer(PATH, ['-b', '--loop', '--no-osd'])
 PROCESSES.append(PLAYER)
 
 def pulseplayer():
@@ -52,37 +58,37 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
-#TODO: create another implementation that 
-LAST = 0
-RATE = 0
-PLAYRATE = 0
-def updateplayer(_reading):
+LAST_READING = [0, 0]
+PLAYRATE = 10 #the current playback rate
+def updateplayer(_readingset):
     """Apply the latest change in reading to the video playback.
-    Seems like its a lot of extra work to query the dbus proxy
-    for current playback speed, so it's just being done simply here"""
-    global LAST
-    global RATE
+    """
+    global LAST_READING
     global PLAYRATE
-    severity = 0
-    if LAST == 0 or LAST == _reading:
-        if RATE > PLAYBACK_INDICES:
-            RATE -= 1
-            PLAYER.action(1)
-    else:
-        delta = _reading - PARAMS['MEDIAN']
-        severity = int(round(delta/PARAMS['STDDEV']))
-        RATE = severity
-    if RATE >= 0:
-        if PLAYRATE < PLAYBACK_INDICES:
-            PLAYER.action(2)
+
+    reconcileplayrate(_readingset[0], _readingset[1])
+    LAST_READING = _readingset
+
+def reconcileplayrate(_rate, _mod):
+    global PLAYRATE
+    print _mod
+    global IS_FF
+    if _mod > 1:
+        PLAYER.action(2)
+        if PLAYRATE < 11:
             PLAYRATE += 1
-    elif RATE < 0:
-        if PLAYRATE > (PLAYBACK_INDICES * -1):
+    else:
+        if _rate > PLAYRATE:
+            PLAYER.action(2)
+            print 'speeding up'
+            PLAYRATE += 1
+            IS_FF = False
+        elif _rate < PLAYRATE:
             PLAYER.action(1)
+            print 'slowing'
             PLAYRATE -= 1
-    logging.info('RATE %s', RATE)
-    logging.info('RDG %s', _reading)
-    LAST = _reading
+            IS_FF = False
+
 
 def quitplayer():
     """Gracefully quit the omxplayer"""
@@ -116,7 +122,6 @@ def saveparams():
         paramsfile.write(str(PARAMS[key]))
         paramsfile.write('\n')
     paramsfile.close()
-    logging.info(PARAMS)
 
 def openparams():
     """Open saved params info on boot"""
@@ -160,18 +165,17 @@ def stopworkerthreads():
             proc.terminate()
 
 spinupi2c()
-checkforparamsfile()
+#checkforparamsfile()
 
 try:
     while True:
         while not READINGSQUEUE.empty():
-            reading = READINGSQUEUE.get()
+            readingset = READINGSQUEUE.get() #array with two values
             if len(PASTREADINGS) > MAX_PASTREADINGS:
                 PASTREADINGS.pop(0)
-            PASTREADINGS.append(reading)
-            updateparams(reading)
-            updateplayer(reading)
-            print reading
+            PASTREADINGS.append(readingset)
+            #updateparams(readingset)
+            updateplayer(readingset)
         if hasattr(schedule, 'run_pending'):
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
