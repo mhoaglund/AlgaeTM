@@ -70,6 +70,7 @@ void loop() {
     if(ambpack > AMB_MAX) AMB_MAX = ambpack;
     reducedAmbient = map(ambpack, 350, AMB_MAX, 1, 11);
     if(pointpack > POINT_MAX) pointpack = POINT_MAX;
+    if(pointpack < 10) pointpack = 10;
     reducedPoint = map(pointpack, 10, POINT_MAX, 1, 11);
   }
 }

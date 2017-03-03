@@ -11,12 +11,12 @@ from utils import ProcessJob
 from i2cagent import I2CAgent
 
 FILENAME = 'params.txt'
-PATH = '/home/pi/algaevid.mov'
+PATH = '/home/pi/IMG_1881_12.mov'
 PROCESSES = []
 
 JOBQUEUE = Queue()
 READINGSQUEUE = Queue()
-COLLECTION_SPEED = 2.5
+COLLECTION_SPEED = 1
 PARAMS = {
     'MAX': 0,
     'MIN': 0,
@@ -27,9 +27,15 @@ PARAMS = {
 PARAMS_UPDATE_RATE = 50
 PASTREADINGS = []
 MAX_PASTREADINGS = 800
-PLAYBACK_INDICES = 4
+PLAYBACK_INDICES = 11
 
-logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
+MAX_POINT_READING = 150
+MIN_POINT_READING = 10
+
+MAX_AMBIENT_READING = 530
+MIN_AMBIENT_READING = 350
+
+logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.INFO)
 
 I2C_SETTINGS = I2cMgrSettings(
     COLLECTION_SPEED,
@@ -43,7 +49,7 @@ def spinupi2c():
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
-PLAYER = OMXPlayer(PATH, ['--loop --no-osd'])
+PLAYER = OMXPlayer(PATH, ['-b', '--loop', '--no-osd'])
 PROCESSES.append(PLAYER)
 
 def pulseplayer():
@@ -52,33 +58,37 @@ def pulseplayer():
     sleep(5)
     PLAYER.pause()
 
-#TODO: create another implementation that 
-LAST = 0
-RATE = 0
-def updateplayer(_reading):
+LAST_READING = [0, 0]
+PLAYRATE = 10 #the current playback rate
+def updateplayer(_readingset):
     """Apply the latest change in reading to the video playback.
-    Seems like its a lot of extra work to query the dbus proxy
-    for current playback speed, so it's just being done simply here"""
-    global LAST
-    global RATE
-    if LAST == 0 or LAST == _reading:
-        if RATE > PLAYBACK_INDICES:
-            RATE -= 1
-            PLAYER.action(1)
+    """
+    global LAST_READING
+    global PLAYRATE
+    print _readingset
+    if _readingset[0] == 0 and _readingset[1] == 0:
+        _readingset = [5,1]
+    reconcileplayrate(_readingset[0], _readingset[1])
+    LAST_READING = _readingset
+
+def reconcileplayrate(_rate, _mod):
+    global PLAYRATE
+    #print _rate
+    global IS_FF
+    if _mod > 1:
+        if PLAYRATE < 10:
+            PLAYER.action(2)
+            PLAYRATE += 1
     else:
-        delta = _reading - PARAMS['MEDIAN']
-        severity = int(round(delta/PARAMS['STDDEV']))
-        if severity > PLAYBACK_INDICES:
-            severity = PLAYBACK_INDICES
-        if severity < (PLAYBACK_INDICES * -1):
-            severity = (PLAYBACK_INDICES * -1)
-        RATE = severity
-    if RATE > LAST:
-        PLAYER.action(2)
-    elif RATE <= LAST:
-        PLAYER.action(1)
-    print 'RATE:', RATE
-    LAST = reading
+        if _rate > PLAYRATE:
+            PLAYER.action(2)
+            print 'speeding up'
+            PLAYRATE += 1
+        elif _rate < PLAYRATE:
+            PLAYER.action(1)
+            print 'slowing'
+            PLAYRATE -= 1
+
 
 def quitplayer():
     """Gracefully quit the omxplayer"""
@@ -112,7 +122,6 @@ def saveparams():
         paramsfile.write(str(PARAMS[key]))
         paramsfile.write('\n')
     paramsfile.close()
-    logging.info(PARAMS)
 
 def openparams():
     """Open saved params info on boot"""
@@ -142,7 +151,7 @@ def updateparams(_reading):
         stddev = numpy.std(numpy.array(PASTREADINGS))
         PARAMS['LOCALAVG'] = avg
         PARAMS['MEDIAN'] = int(median)
-        PARAMS['STDDEV'] = int(stddev)
+        PARAMS['STDDEV'] = int(stddev)/2
         updatesteps = 0
     else:
         updatesteps += 1
@@ -155,19 +164,24 @@ def stopworkerthreads():
             print 'stopping worker'
             proc.terminate()
 
+def cleanreboot():
+    """Superstitious daily restart"""
+    schedule.clear()
+    stopworkerthreads()
+    os.system('sudo reboot now')
+
+schedule.every().day.at("7:00").do(cleanreboot)
 spinupi2c()
-checkforparamsfile()
 
 try:
     while True:
         while not READINGSQUEUE.empty():
-            reading = READINGSQUEUE.get()
+            readingset = READINGSQUEUE.get() #array with two values
             if len(PASTREADINGS) > MAX_PASTREADINGS:
                 PASTREADINGS.pop(0)
-            PASTREADINGS.append(reading)
-            updateparams(reading)
-            updateplayer(reading)
-            print reading
+            PASTREADINGS.append(readingset)
+            #updateparams(readingset)
+            updateplayer(readingset)
         if hasattr(schedule, 'run_pending'):
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
