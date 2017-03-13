@@ -30,7 +30,7 @@ byte PUMP_STATECHANGE_AUX_PAUSES[] = {0,0,0,0,0,0,0};
 byte PUMP_STATECHANGE_AUX_RAND_PAUSES[] = {0,0,0,0,0,0,0};
 
 //Working variables for the pump loop.
-byte PUMP_TICKS = 0;
+byte PUMP_TICKS = 21;
 long checktime = 500;
 
 boolean DIR = true;

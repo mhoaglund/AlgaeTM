@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import numpy
 from time import sleep
@@ -11,7 +12,7 @@ from utils import ProcessJob
 from i2cagent import I2CAgent
 
 FILENAME = 'params.txt'
-PATH = '/home/pi/IMG_1881_12.mov'
+PATH = '/home/pi/IMG_1881_15.mov'
 PROCESSES = []
 
 JOBQUEUE = Queue()
@@ -35,7 +36,7 @@ MIN_POINT_READING = 10
 MAX_AMBIENT_READING = 530
 MIN_AMBIENT_READING = 350
 
-logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(message)s', filename='logs.log', level=logging.DEBUG)
 
 I2C_SETTINGS = I2cMgrSettings(
     COLLECTION_SPEED,
@@ -44,13 +45,14 @@ I2C_SETTINGS = I2cMgrSettings(
 
 def spinupi2c():
     """Activate the worker process that handles i2c"""
+    global PROCESSES
     if __name__ == '__main__':
         _i2cthread = I2CAgent(I2C_SETTINGS, JOBQUEUE, READINGSQUEUE)
         PROCESSES.append(_i2cthread)
         _i2cthread.start()
 
 PLAYER = OMXPlayer(PATH, ['-b', '--loop', '--no-osd'])
-PROCESSES.append(PLAYER)
+#PROCESSES.append(PLAYER)
 
 def pulseplayer():
     """Glorified test function"""
@@ -59,39 +61,48 @@ def pulseplayer():
     PLAYER.pause()
 
 LAST_READING = [0, 0]
-PLAYRATE = 10 #the current playback rate
+PLAYRATE = 3 #the current playback rate
+TARGETRATE = 1
 def updateplayer(_readingset):
     """Apply the latest change in reading to the video playback.
     """
     global LAST_READING
     global PLAYRATE
-    print _readingset
+    global TARGETRATE
+    RATE = 1
     if _readingset[0] == 0 and _readingset[1] == 0:
         _readingset = [5,1]
-    reconcileplayrate(_readingset[0], _readingset[1])
+    if _readingset[1] == 1:
+        RATE = 1
+    if _readingset[1] > 1 and _readingset[1] <= 2:
+        RATE = 2
+    if _readingset[1] >= 3 and _readingset[1] <= 8:
+        RATE = 3
+    if _readingset[1] > 8 and _readingset[1] <= 11:
+        RATE = 4
+
+    TARGETRATE = RATE
+    reconcileplayrate()
     LAST_READING = _readingset
 
-def reconcileplayrate(_rate, _mod):
+def reconcileplayrate():
     global PLAYRATE
-    #print _rate
-    global IS_FF
-    if _mod > 1:
-        if PLAYRATE < 10:
-            PLAYER.action(2)
-            PLAYRATE += 1
-    else:
-        if _rate > PLAYRATE:
-            PLAYER.action(2)
-            print 'speeding up'
-            PLAYRATE += 1
-        elif _rate < PLAYRATE:
-            PLAYER.action(1)
-            print 'slowing'
-            PLAYRATE -= 1
+    global TARGETRATE
+    if TARGETRATE > PLAYRATE:
+        PLAYER.action(2)
+        print 'speeding up'
+        PLAYRATE += 1
+        return
+    elif TARGETRATE < PLAYRATE:
+        PLAYER.action(1)
+        print 'slowing'
+        PLAYRATE -= 1
+        return
 
 
 def quitplayer():
     """Gracefully quit the omxplayer"""
+    logging.info('Stopping OMX...')
     PLAYER.quit()
 
 def adjustsamplerate(adjustment):
@@ -158,19 +169,33 @@ def updateparams(_reading):
 
 def stopworkerthreads():
     """Stop any currently running threads"""
+    global PROCESSES
+    logging.info('Shutting down workers...')
     for proc in PROCESSES:
         print 'found worker'
-        if proc.is_alive():
-            print 'stopping worker'
-            proc.terminate()
+        #if proc.is_alive():
+        print 'stopping worker'
+        proc.stop()
+        proc.join()
 
 def cleanreboot():
     """Superstitious daily restart"""
+    logging.info('Rebooting...')
     schedule.clear()
-    stopworkerthreads()
+    #stopworkerthreads()
+    #quitplayer()
     os.system('sudo reboot now')
 
+def cleanstop():
+    logging.info('Stopping IO and video...')
+    quitplayer()
+    stopworkerthreads()
+    #time.sleep(2)
+    #sys.exit()
+
+#stop the vdeo at 10pm
 schedule.every().day.at("7:00").do(cleanreboot)
+schedule.every().day.at("22:00").do(cleanstop)
 spinupi2c()
 
 try:
@@ -186,6 +211,7 @@ try:
             schedule.run_pending()
 except (KeyboardInterrupt, SystemExit):
     print 'Interrupted!'
+    logging.info('System or key interrupt triggered.')
     saveparams()
     quitplayer()
     stopworkerthreads()

@@ -25,21 +25,20 @@ class I2CAgent(Process):
                 if currentjob.directive == "CHANGE_SAMPLERATE":
                     self.delay = currentjob.fine
             self.getlatestreadings()
+        while not self.cont:
+            return
 
-    def terminate(self):
+    def stop(self):
         print 'Terminating...'
         self.cont = False
+        super(I2CAgent, self).terminate()
 
     def getlatestreadings(self):
         """Grab the latest reading from the client device and throw it on our queue"""
         try:
             rawinput = self.bus.read_i2c_block_data(0x08, 0)
-            cond = 0.1*(float(rawinput[1]))
-			expcond = int(math.pow(cond, 1.9))
-			if expcond < 1: expcond = 1
-			if expcond > 11: expcond = 11
             self.lastreading[0] = rawinput[0] #between 1 and 11, usu. 5-7
-            self.lastreading[1] = expcond #between 1 and 11 exponential. usu. 1
+            self.lastreading[1] = rawinput[1]
             self.myreadings.put(self.lastreading)
         except IOError as err:
             logging.info('i2c encountered a problem. %s', err)
