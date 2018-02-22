@@ -12,11 +12,7 @@ from utils import ProcessJob
 from i2cagent import I2CAgent
 
 FILENAME = 'params.txt'
-<<<<<<< HEAD
 PATH = '/home/pi/IMG_1881_15.mov'
-=======
-PATH = '/home/pi/IMG_1881_8.mov'
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 PROCESSES = []
 
 JOBQUEUE = Queue()
@@ -33,15 +29,12 @@ PARAMS_UPDATE_RATE = 50
 PASTREADINGS = []
 MAX_PASTREADINGS = 800
 PLAYBACK_INDICES = 11
-<<<<<<< HEAD
 
 MAX_POINT_READING = 150
 MIN_POINT_READING = 10
 
 MAX_AMBIENT_READING = 530
 MIN_AMBIENT_READING = 350
-=======
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 
 MAX_POINT_READING = 150
 MIN_POINT_READING = 10
@@ -65,11 +58,7 @@ def spinupi2c():
         _i2cthread.start()
 
 PLAYER = OMXPlayer(PATH, ['-b', '--loop', '--no-osd'])
-<<<<<<< HEAD
 #PROCESSES.append(PLAYER)
-=======
-PROCESSES.append(PLAYER)
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 
 def pulseplayer():
     """Glorified test function"""
@@ -78,18 +67,13 @@ def pulseplayer():
     PLAYER.pause()
 
 LAST_READING = [0, 0]
-<<<<<<< HEAD
 PLAYRATE = 3 #the current playback rate
 TARGETRATE = 1
-=======
-PLAYRATE = 10 #the current playback rate
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 def updateplayer(_readingset):
     """Apply the latest change in reading to the video playback.
     """
     global LAST_READING
     global PLAYRATE
-<<<<<<< HEAD
     global TARGETRATE
     RATE = 1
     if _readingset[0] == 0 and _readingset[1] == 0:
@@ -120,31 +104,6 @@ def reconcileplayrate():
         print 'slowing'
         PLAYRATE -= 1
         return
-=======
-
-    reconcileplayrate(_readingset[0], _readingset[1])
-    LAST_READING = _readingset
-
-def reconcileplayrate(_rate, _mod):
-    global PLAYRATE
-    print _mod
-    global IS_FF
-    if _mod > 1:
-        PLAYER.action(2)
-        if PLAYRATE < 11:
-            PLAYRATE += 1
-    else:
-        if _rate > PLAYRATE:
-            PLAYER.action(2)
-            print 'speeding up'
-            PLAYRATE += 1
-            IS_FF = False
-        elif _rate < PLAYRATE:
-            PLAYER.action(1)
-            print 'slowing'
-            PLAYRATE -= 1
-            IS_FF = False
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 
 
 def quitplayer():
@@ -244,10 +203,6 @@ def cleanstop():
 schedule.every().day.at("7:00").do(cleanreboot)
 schedule.every().day.at("22:00").do(cleanstop)
 spinupi2c()
-<<<<<<< HEAD
-=======
-#checkforparamsfile()
->>>>>>> 4210870d7be2d8cd3a738f02b74de7002d75a9d1
 
 try:
     while True:

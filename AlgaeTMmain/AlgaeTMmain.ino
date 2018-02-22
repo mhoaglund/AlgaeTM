@@ -17,20 +17,20 @@
 #include <SoftwareSerial.h>
 #include <Wire.h>
 
-byte PUMPS[] = {36,38,40,42,44,46,48}; //Logic output pins to relays
-#define PUMP_COUNT 7 //Reference for arr size
+byte PUMPS[] = {36,38,40,42}; //Logic output pins to relays
+#define PUMP_COUNT 4 //Reference for arr size
 
 const long SIGNAL_CHECKTIME = 45; //pump loop speed for signal wave
-const byte MAX_TICKS = 21; //number of ticks in a measure of time
-const byte PUMP_STATECHANGES[] = {1,4,7,10,13,16,19}; //pump changeover points
+const byte MAX_TICKS = 12; //number of ticks in a measure of time
+const byte PUMP_STATECHANGES[] = {1,4,7,10}; //pump changeover points
 
 //At times, pump timing will be varied by small random amounts. Pauses will also be inserted.
-byte PUMP_STATECHANGE_AUX_STARTS[] = {0,0,0,0,0,0,0};
-byte PUMP_STATECHANGE_AUX_PAUSES[] = {0,0,0,0,0,0,0};
-byte PUMP_STATECHANGE_AUX_RAND_PAUSES[] = {0,0,0,0,0,0,0};
+byte PUMP_STATECHANGE_AUX_STARTS[] = {0,0,0,0};
+byte PUMP_STATECHANGE_AUX_PAUSES[] = {0,0,0,0};
+byte PUMP_STATECHANGE_AUX_RAND_PAUSES[] = {0,0,0,0};
 
 //Working variables for the pump loop.
-byte PUMP_TICKS = 21;
+byte PUMP_TICKS = 12;
 long checktime = 500;
 
 boolean DIR = true;
@@ -72,9 +72,6 @@ void setup() {
   pinMode(PUMPS[1], OUTPUT);
   pinMode(PUMPS[2], OUTPUT);
   pinMode(PUMPS[3], OUTPUT);
-  pinMode(PUMPS[4], OUTPUT);
-  pinMode(PUMPS[5], OUTPUT);
-  pinMode(PUMPS[6], OUTPUT);
   Serial.begin(9600);
   //Serial3.begin(9600);
   Serial1.begin(9600);
