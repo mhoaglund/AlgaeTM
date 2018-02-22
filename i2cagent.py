@@ -39,6 +39,7 @@ class I2CAgent(Process):
             rawinput = self.bus.read_i2c_block_data(0x08, 0)
             self.lastreading[0] = rawinput[0] #between 1 and 11, usu. 5-7
             self.lastreading[1] = rawinput[1]
+            self.lastreading[1] = rawinput[1] #between 1 and 11. usu. 1
             self.myreadings.put(self.lastreading)
         except IOError as err:
             logging.info('i2c encountered a problem. %s', err)
