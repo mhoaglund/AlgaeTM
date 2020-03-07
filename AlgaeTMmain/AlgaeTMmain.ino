@@ -1,23 +1,13 @@
 //Co2 Intake and Pump Control Firmware
-//Developed for Alison Hiltner, 2017
+//Developed for Alison Hiltner, 2020
 //Developed by maxwell.hoaglund@gmail.com
 //****
-//This firmware takes a reading from each of two different co2 sensors.
-//The point sensor on Serial1 measures the co2 within the environment of a mask.
-//The ambient sensor measures the co2 content within the entire gallery.
-
-//Both readings are used to control the cycle rate of a set of 7 pumps, which
-//aerate tanks of algae.
-
-//Readings are also sent to a listener device for routing them to other
-//devices over other protocols: see AlgaeTMlistener.ino
+//This firmware takes a reading from a single SprintIR Co2 sensor and uses it to generate a control pattern for a set of 4 relay-operated air pumps.
+//This is the indianapolis version, which doesn't have i2c output.
 
 //Target is Arduino Mega 2560.
 
-#include <SoftwareSerial.h>
-#include <Wire.h>
-
-byte PUMPS[] = {36,38,40,42}; //Logic output pins to relays
+byte PUMPS[] = {36,38,40,42}; //Logic output pins to pump relays
 #define PUMP_COUNT 4 //Reference for arr size
 
 const long SIGNAL_CHECKTIME = 45; //pump loop speed for signal wave
@@ -46,9 +36,7 @@ const long amb_interval = 1000;
 //*** SENSOR READING PARAMS:
 int ambientmax = 515;
 int ambientmin = 375;
-int ambientreading = 450; //the latest ambient reading
-//Typical basal reading with a good indoor calibration is 350-450.
-//Unlikely to change much over time with a good calibration.
+int ambientreading = 450; //this is a vestigial stub from an old implementation that had a second sensor.
 
 int pointmax = 60;
 int pointmin = 11;
@@ -73,9 +61,7 @@ void setup() {
   pinMode(PUMPS[2], OUTPUT);
   pinMode(PUMPS[3], OUTPUT);
   Serial.begin(9600);
-  //Serial3.begin(9600);
   Serial1.begin(9600);
-  Wire.begin();
   randomSeed(analogRead(0));
   Serial.println("starting...");
 }
@@ -90,9 +76,7 @@ void loop() {
 
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > amb_interval) {
-    previousMillis = currentMillis; 
-    
-    UpdateIntern();
+    previousMillis = currentMillis;
   }
   
   long timeDelta = currentMillis - pumpprevMillis;
@@ -215,15 +199,4 @@ void DecoratePumpCycle(){
      PUMP_STATECHANGE_AUX_PAUSES[i] = _newpause;
      PUMP_STATECHANGE_AUX_RAND_PAUSES[i] = _randpause;
   }
-}
-
-void UpdateIntern(){
-  Wire.beginTransmission(8);
-  byte packet[] = {
-    lowByte(ambientreading),
-    highByte(ambientreading),
-    lowByte(pointreading),
-    highByte(pointreading)};
-  Wire.write(packet, 4);
-  Wire.endTransmission();
 }
