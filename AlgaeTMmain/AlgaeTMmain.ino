@@ -3,14 +3,13 @@
 //Developed by maxwell.hoaglund@gmail.com
 //****
 //This firmware takes a reading from a single SprintIR Co2 sensor and uses it to generate a control pattern for a set of 4 relay-operated air pumps.
-//This is the indianapolis version, which doesn't have i2c output.
 
 //Target is Arduino Mega 2560.
 
 byte PUMPS[] = {36,38,40,42}; //Logic output pins to pump relays
 #define PUMP_COUNT 4 //Reference for arr size
 
-const long SIGNAL_CHECKTIME = 45; //pump loop speed for signal wave
+const long SIGNAL_CHECKTIME = 65; //pump loop speed for signal wave
 const byte MAX_TICKS = 12; //number of ticks in a measure of time
 const byte PUMP_STATECHANGES[] = {1,4,7,10}; //pump changeover points
 
@@ -25,20 +24,15 @@ long checktime = 500;
 
 boolean DIR = true;
 boolean CLEANSWEEP = true;
-const byte CLEAN_THRESHOLD = 40;
+const byte CLEAN_THRESHOLD = 90;
 const byte STEADY_TIME = 8;
 
-long previousMillis = 0;
 long pumpprevMillis = 0;
 
 const long amb_interval = 1000;
 
 //*** SENSOR READING PARAMS:
-int ambientmax = 515;
-int ambientmin = 375;
-int ambientreading = 450; //this is a vestigial stub from an old implementation that had a second sensor.
-
-int pointmax = 60;
+int pointmax = 300;
 int pointmin = 11;
 int pointreading = 0; //the latest point reading
 int oldpointreading = 0;
@@ -50,7 +44,7 @@ const int MAX_BASE_CHECKTIME = 450;
 boolean SHOULD_SIGNAL = false;
 boolean SWEEP_DEBOUNCE = false;
 long debouncemillis = 0;
-long debounce_interval = 60000;
+long debounce_interval = 180000;
 
 //*** END SENSOR READING PARAMS
 byte stochasticity = 4;
@@ -67,17 +61,15 @@ void setup() {
 }
 
 void loop() {
+  unsigned long currentMillis = millis();
+
+  //TODO reimplement to use millis
   if(debouncemillis > debounce_interval){
     debouncemillis = 0;
     SWEEP_DEBOUNCE = false;
     Serial.println("Debounce gate closed");
   }
   if(SWEEP_DEBOUNCE) debouncemillis++;
-
-  unsigned long currentMillis = millis();
-  if(currentMillis - previousMillis > amb_interval) {
-    previousMillis = currentMillis;
-  }
   
   long timeDelta = currentMillis - pumpprevMillis;
   if(timeDelta > checktime) {
@@ -92,9 +84,7 @@ void loop() {
     int cleanptrdg = ptreading.toInt();
     if(cleanptrdg < 11) cleanptrdg = 10;
     pointreading = cleanptrdg;
-    Serial.print("PT: ");
-    Serial.println(pointreading);
-    if(pointreading > pointmax) pointmax = pointreading;
+    if(pointreading > pointmax) pointreading = pointmax;
     if(pointreading < pointmin) pointreading = pointmin;
   }
   UpdatePumpTimeSignature();
@@ -103,6 +93,8 @@ void loop() {
 byte offct = 0;
 byte onct = 0;
 void UpdatePumpStates(){
+      Serial.print("PT: ");
+    Serial.println(pointreading);
   if(PUMP_TICKS >= MAX_TICKS){
     DecoratePumpCycle();
     if(CLEANSWEEP){
@@ -180,10 +172,7 @@ void UpdatePumpTimeSignature(){
   int logscalar = log((0.1 * pointreading)-0.5)*60;
   if(logscalar < 1) logscalar = 1; //superstition
   int base_scalar = map(pointreading, 300, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
-  //int mappedscalar = map(logscalar, 200, 1, MIN_BASE_CHECKTIME, MAX_BASE_CHECKTIME);
-  int ambientmodifier = map(ambientreading, ambientmin, ambientmax, 20, 1);
-  //checktime = mappedscalar + ambientmodifier;
-  checktime = base_scalar + ambientmodifier;
+  checktime = base_scalar + 10;
   if(checktime < SIGNAL_CHECKTIME) checktime = SIGNAL_CHECKTIME; //throttling for now, for the pumps
 }
 
